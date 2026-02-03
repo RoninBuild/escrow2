@@ -19,7 +19,7 @@ contract EscrowFactory {
     uint16 public arbiterFeeBps = 10;    // Default 0.1%
     uint256 public constant MAX_BPS = 10000;
     address public swapRouter = 0x2626664c2603336E57B271c5C0b26F421741e481; // Uniswap V3 Router
-    address public feeToken = 0x00000000A22cB18fd6b4D7E9a335c4b96b189a38;   // TOWNS (Base Network)
+    address public feeToken = 0x00000000A22C618fd6b4D7E9A335C4B96B189a38;   // TOWNS (Base Network)
 
     // Registry
     address[] public allEscrows;
