@@ -5,10 +5,26 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
+/// @notice Minimal interface for Uniswap V3 SwapRouter
+interface ISwapRouter {
+    struct ExactInputSingleParams {
+        address tokenIn;
+        address tokenOut;
+        uint24 fee;
+        address recipient;
+        uint256 deadline;
+        uint256 amountIn;
+        uint256 amountOutMinimum;
+        uint160 sqrtPriceLimitX96;
+    }
+    function exactInputSingle(ExactInputSingleParams calldata params) external payable returns (uint256 amountOut);
+}
+
 /**
  * @title Escrow
  * @notice Single escrow deal between buyer and seller with optional arbiter
  * @dev Handles USDC escrow with deadline-based refunds and dispute resolution
+ *      Pays 0.1% fee to arbiter in TOWNS token (swapped from USDC via Uniswap V3)
  */
 contract Escrow is ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -22,10 +38,15 @@ contract Escrow is ReentrancyGuard {
         RESOLVED    // Dispute resolved by arbiter
     }
 
+    // Constants - Base Mainnet
+    address public constant SWAP_ROUTER = 0x2626664c2603336E57B271c5C0b26F421741e481;
+    address public constant TOWNS_TOKEN = 0x000000fa00b200406de700041cfc6b19bbfb4d13;
+    uint24 public constant POOL_FEE = 3000; // 0.3% Uniswap pool fee
+
     // Deal parameters
     address public immutable buyer;
     address public immutable seller;
-    address public immutable token;
+    address public immutable token; // USDC
     uint256 public immutable amount;
     uint256 public immutable deadline;
     address public immutable arbiter; // address(0) if no arbiter
@@ -41,6 +62,7 @@ contract Escrow is ReentrancyGuard {
     event Refunded(uint256 amount, uint256 timestamp);
     event DisputeOpened(address indexed initiator, uint256 timestamp);
     event DisputeResolved(address indexed winner, uint256 amount, uint256 timestamp);
+    event FeePaid(address indexed arbiter, uint256 usdcAmount, uint256 townsAmount);
 
     // Errors
     error Unauthorized();
@@ -49,6 +71,7 @@ contract Escrow is ReentrancyGuard {
     error DeadlinePassed();
     error NoArbiter();
     error InvalidAmount();
+    error SwapFailed();
 
     constructor(
         address _buyer,
@@ -94,8 +117,43 @@ contract Escrow is ReentrancyGuard {
     }
 
     /**
+     * @notice Swap USDC to TOWNS and send to arbiter
+     * @param usdcAmount Amount of USDC to swap
+     * @return townsReceived Amount of TOWNS received
+     */
+    function _payFeeInTowns(uint256 usdcAmount) internal returns (uint256 townsReceived) {
+        if (usdcAmount == 0 || arbiter == address(0)) return 0;
+
+        // Approve SwapRouter to spend USDC
+        IERC20(token).approve(SWAP_ROUTER, usdcAmount);
+
+        // Swap USDC -> TOWNS
+        ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
+            tokenIn: token,
+            tokenOut: TOWNS_TOKEN,
+            fee: POOL_FEE,
+            recipient: arbiter,
+            deadline: block.timestamp,
+            amountIn: usdcAmount,
+            amountOutMinimum: 0, // Accept any amount (consider adding slippage protection)
+            sqrtPriceLimitX96: 0
+        });
+
+        try ISwapRouter(SWAP_ROUTER).exactInputSingle(params) returns (uint256 amountOut) {
+            townsReceived = amountOut;
+            emit FeePaid(arbiter, usdcAmount, townsReceived);
+        } catch {
+            // If swap fails, send USDC directly to arbiter as fallback
+            IERC20(token).approve(SWAP_ROUTER, 0); // Reset approval
+            IERC20(token).safeTransfer(arbiter, usdcAmount);
+            emit FeePaid(arbiter, usdcAmount, 0);
+            townsReceived = 0;
+        }
+    }
+
+    /**
      * @notice Release funds to seller (happy path)
-     * @dev Only buyer can release. Sends 0.5% fee to arbiter if set.
+     * @dev Only buyer can release. Sends 0.1% fee to arbiter in TOWNS.
      */
     function release() external nonReentrant {
         if (msg.sender != buyer) revert Unauthorized();
@@ -105,8 +163,8 @@ contract Escrow is ReentrancyGuard {
 
         uint256 fee = 0;
         if (arbiter != address(0)) {
-            fee = (amount * 5) / 1000;
-            IERC20(token).safeTransfer(arbiter, fee);
+            fee = amount / 1000; // 0.1%
+            _payFeeInTowns(fee);
         }
 
         IERC20(token).safeTransfer(seller, amount - fee);
@@ -153,8 +211,8 @@ contract Escrow is ReentrancyGuard {
 
         status = Status.RESOLVED;
 
-        uint256 fee = (amount * 5) / 1000;
-        IERC20(token).safeTransfer(arbiter, fee);
+        uint256 fee = amount / 1000; // 0.1%
+        _payFeeInTowns(fee);
 
         address winner = _payToSeller ? seller : buyer;
         IERC20(token).safeTransfer(winner, amount - fee);
