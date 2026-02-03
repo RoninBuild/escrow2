@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Final sync: 2026-02-03T21:00:00Z
 pragma solidity ^0.8.24;
 
 import "./Escrow.sol";
