@@ -16,8 +16,8 @@ contract UpdateConfigScript is Script {
         // 1. Set correct TOWNS address on Base
         factory.setFeeToken(0x00000000A22C618fd6b4D7E9A335C4B96B189a38);
         
-        // 2. Set optimal pool fee (0.3% = 3000)
-        factory.setDefaultPoolFee(3000);
+        // 2. Set pool fee to 1% (10000) - only tier with USDC/TOWNS liquidity on Base
+        factory.setDefaultPoolFee(10000);
 
         vm.stopBroadcast();
     }
