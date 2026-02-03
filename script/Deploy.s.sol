@@ -24,7 +24,8 @@ contract DeployScript is Script {
     function runMainnet() public {
         address usdc = vm.envOr("USDC_ADDRESS", USDC_BASE);
 
-        vm.startBroadcast();
+        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+        vm.startBroadcast(deployerPrivateKey);
 
         EscrowFactory factory = new EscrowFactory(usdc);
 

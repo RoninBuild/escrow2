@@ -8,7 +8,8 @@ contract UpdateConfigScript is Script {
     function run() external {
         address factoryAddress = 0xFeDD8d8DCa1d09d517407C8F548B611656Cb2363;
         
-        vm.startBroadcast();
+        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+        vm.startBroadcast(deployerPrivateKey);
 
         EscrowFactory factory = EscrowFactory(factoryAddress);
         
