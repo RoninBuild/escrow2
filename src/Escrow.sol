@@ -18,6 +18,15 @@ interface ISwapRouter {
         uint160 sqrtPriceLimitX96;
     }
     function exactInputSingle(ExactInputSingleParams calldata params) external payable returns (uint256 amountOut);
+    
+    struct ExactInputParams {
+        bytes path;
+        address recipient;
+        uint256 deadline;
+        uint256 amountIn;
+        uint256 amountOutMinimum;
+    }
+    function exactInput(ExactInputParams calldata params) external payable returns (uint256 amountOut);
 }
 
 /**
@@ -144,19 +153,22 @@ contract Escrow is ReentrancyGuard {
         // Approve SwapRouter to spend USDC
         IERC20(token).approve(swapRouter, usdcAmount);
 
-        // Swap USDC -> TOWNS (or feeToken)
-        ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
-            tokenIn: token,
-            tokenOut: feeToken,
-            fee: poolFee,
+        // Path: USDC -> 0.05% -> WETH -> 1% -> TOWNS
+        // Base WETH: 0x4200000000000000000000000000000000000006
+        address weth = 0x4200000000000000000000000000000000000006;
+        
+        // Encode path: tokenIn (USDC) -> fee1 (500) -> tokenMiddle (WETH) -> fee2 (10000) -> tokenOut (TOWNS)
+        bytes memory path = abi.encodePacked(token, uint24(500), weth, uint24(10000), feeToken);
+
+        ISwapRouter.ExactInputParams memory params = ISwapRouter.ExactInputParams({
+            path: path,
             recipient: arbiter,
             deadline: block.timestamp,
             amountIn: usdcAmount,
-            amountOutMinimum: 0, // Accept any amount
-            sqrtPriceLimitX96: 0
+            amountOutMinimum: 0
         });
 
-        try ISwapRouter(swapRouter).exactInputSingle(params) returns (uint256 amountOut) {
+        try ISwapRouter(swapRouter).exactInput(params) returns (uint256 amountOut) {
             townsReceived = amountOut;
             emit FeePaid(arbiter, usdcAmount, townsReceived);
         } catch {
