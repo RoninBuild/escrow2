@@ -1,0 +1,25 @@
+{
+  "name": "handshake-escrow-contracts",
+  "version": "1.0.0",
+  "description": "Trustless escrow smart contracts for Towns on Base",
+  "scripts": {
+    "build": "forge build",
+    "test": "forge test",
+    "test:gas": "forge test --gas-report",
+    "test:coverage": "forge coverage",
+    "deploy:sepolia": "forge script script/Deploy.s.sol:DeployScript --sig 'runTestnet()' --rpc-url $BASE_SEPOLIA_RPC_URL --broadcast --verify",
+    "deploy:base": "forge script script/Deploy.s.sol:DeployScript --rpc-url $BASE_RPC_URL --broadcast --verify",
+    "extract-abi": "./extract-abi.sh",
+    "format": "forge fmt",
+    "format:check": "forge fmt --check"
+  },
+  "keywords": [
+    "escrow",
+    "towns",
+    "base",
+    "defi",
+    "web3"
+  ],
+  "author": "",
+  "license": "MIT"
+}
