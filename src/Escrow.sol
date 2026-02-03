@@ -33,7 +33,7 @@ interface ISwapRouter {
  * @title Escrow
  * @notice Single escrow deal between buyer and seller with optional arbiter
  * @dev Handles USDC escrow with deadline-based refunds and dispute resolution
- *      Pays 0.1% fee to arbiter in TOWNS token (swapped from USDC via Uniswap V3)
+ *      Pays 3% fee to arbiter in TOWNS token (swapped from USDC via Uniswap V3)
  */
 contract Escrow is ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -182,7 +182,7 @@ contract Escrow is ReentrancyGuard {
 
     /**
      * @notice Release funds to seller (happy path)
-     * @dev Only buyer can release. Sends 0.1% fee to arbiter in TOWNS.
+     * @dev Only buyer can release. Sends 3% fee to arbiter in TOWNS.
      */
     function release() external nonReentrant {
         if (msg.sender != buyer) revert Unauthorized();

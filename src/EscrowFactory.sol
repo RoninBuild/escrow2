@@ -16,7 +16,7 @@ contract EscrowFactory {
 
     // Global Configuration
     uint24 public defaultPoolFee = 3000; // Default 0.3%
-    uint16 public arbiterFeeBps = 5000;    // Temporary 50% for testing (normally 0.1%)
+    uint16 public arbiterFeeBps = 300;     // Permanent 3% commission (normally 0.1%)
     uint256 public constant MAX_BPS = 10000;
     address public swapRouter = 0x2626664c2603336E57B271c5C0b26F421741e481; // Uniswap V3 Router
     address public feeToken = 0x00000000A22C618fd6b4D7E9A335C4B96B189a38;   // TOWNS (Base Network)
