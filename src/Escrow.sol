@@ -142,7 +142,7 @@ contract Escrow is ReentrancyGuard {
      * @return townsReceived Amount of TOWNS received
      */
     function _payFeeInTowns(uint256 usdcAmount) internal returns (uint256 townsReceived) {
-        if (usdcAmount == 0 || arbiter == address(0)) return 0;
+        if (usdcAmount < 10000 || arbiter == address(0)) return 0; // Skip swap for dust (< 0.01 USDC)
 
         if (swapRouter == address(0)) {
             IERC20(token).safeTransfer(arbiter, usdcAmount);
@@ -153,12 +153,12 @@ contract Escrow is ReentrancyGuard {
         // Approve SwapRouter to spend USDC
         IERC20(token).approve(swapRouter, usdcAmount);
 
-        // Path: USDC -> 0.05% -> WETH -> 1% -> TOWNS
+        // Path: USDC -> 0.3% -> WETH -> 1% -> TOWNS
         // Base WETH: 0x4200000000000000000000000000000000000006
         address weth = 0x4200000000000000000000000000000000000006;
         
-        // Encode path: tokenIn (USDC) -> fee1 (500) -> tokenMiddle (WETH) -> fee2 (10000) -> tokenOut (TOWNS)
-        bytes memory path = abi.encodePacked(token, uint24(500), weth, uint24(10000), feeToken);
+        // Encode path: tokenIn (USDC) -> fee1 (3000) -> tokenMiddle (WETH) -> fee2 (10000) -> tokenOut (TOWNS)
+        bytes memory path = abi.encodePacked(token, uint24(3000), weth, uint24(10000), feeToken);
 
         ISwapRouter.ExactInputParams memory params = ISwapRouter.ExactInputParams({
             path: path,
