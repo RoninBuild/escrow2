@@ -13,6 +13,12 @@ contract EscrowFactory {
     mapping(address => bool) public allowedTokens;
     address public owner;
 
+    // Global Configuration
+    uint24 public defaultPoolFee = 10000; // Default 1%
+    uint16 public arbiterFeeBps = 10;    // Default 0.1%
+    address public swapRouter = 0x2626664c2603336E57B271c5C0b26F421741e481; // Uniswap V3 Router
+    address public feeToken = 0x000000Fa00b200406de700041CFc6b19BbFB4d13;   // TOWNS
+
     // Registry
     address[] public allEscrows;
     mapping(address => address[]) public buyerEscrows;
@@ -32,6 +38,8 @@ contract EscrowFactory {
     );
 
     event TokenAllowed(address indexed token, bool allowed);
+    event ConfigUpdated(string key, address value);
+    event CalconfigUpdated(string key, uint256 value);
 
     constructor(address _initialToken) {
         owner = msg.sender;
@@ -64,7 +72,7 @@ contract EscrowFactory {
     ) external returns (address escrowAddress) {
         require(allowedTokens[token], "Token not allowed");
 
-        // Create new Escrow contract
+        // Create new Escrow contract with current global config
         Escrow escrow = new Escrow(
             msg.sender, // buyer
             seller,
@@ -72,7 +80,11 @@ contract EscrowFactory {
             amount,
             deadline,
             arbiter,
-            memoHash
+            memoHash,
+            swapRouter,
+            feeToken,
+            defaultPoolFee,
+            arbiterFeeBps
         );
 
         escrowAddress = address(escrow);
@@ -96,6 +108,33 @@ contract EscrowFactory {
         );
 
         return escrowAddress;
+    }
+
+    // --- Configuration Setters ---
+
+    function setSwapRouter(address _router) external onlyOwner {
+        swapRouter = _router;
+        emit ConfigUpdated("swapRouter", _router);
+    }
+
+    function setFeeToken(address _token) external onlyOwner {
+        feeToken = _token;
+        emit ConfigUpdated("feeToken", _token);
+    }
+
+    function setDefaultPoolFee(uint24 _fee) external onlyOwner {
+        defaultPoolFee = _fee;
+        emit CalconfigUpdated("defaultPoolFee", _fee);
+    }
+
+    function setArbiterFeeBps(uint16 _bps) external onlyOwner {
+        arbiterFeeBps = _bps;
+        emit CalconfigUpdated("arbiterFeeBps", _bps);
+    }
+
+    function transferOwnership(address _newOwner) external onlyOwner {
+        require(_newOwner != address(0), "Zero address");
+        owner = _newOwner;
     }
 
     /**

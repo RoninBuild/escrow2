@@ -69,6 +69,9 @@ contract EscrowTest is Test {
         usdc = new MockUSDC();
         factory = new EscrowFactory(address(usdc));
 
+        // Disable swap for tests to trigger USDC fallback
+        factory.setSwapRouter(address(0));
+
         // Setup deadline (1 hour from now)
         deadline = block.timestamp + 1 hours;
 
@@ -210,7 +213,11 @@ contract EscrowTest is Test {
         vm.stopPrank();
 
         assertEq(uint256(escrow.status()), uint256(Escrow.Status.RELEASED));
-        assertEq(usdc.balanceOf(seller), sellerBalanceBefore + AMOUNT);
+        
+        // Calculate expected fee
+        uint256 expectedFee = (AMOUNT * factory.arbiterFeeBps()) / 10000;
+        assertEq(usdc.balanceOf(seller), sellerBalanceBefore + AMOUNT - expectedFee);
+        assertEq(usdc.balanceOf(arbiter), expectedFee); // Fallback to USDC in mock
     }
 
     function test_RevertRelease_NotBuyer() public {
@@ -418,7 +425,10 @@ contract EscrowTest is Test {
         escrow.resolve(true);
 
         assertEq(uint256(escrow.status()), uint256(Escrow.Status.RESOLVED));
-        assertEq(usdc.balanceOf(seller), sellerBalanceBefore + AMOUNT);
+        
+        uint256 expectedFee = (AMOUNT * factory.arbiterFeeBps()) / 10000;
+        assertEq(usdc.balanceOf(seller), sellerBalanceBefore + AMOUNT - expectedFee);
+        assertEq(usdc.balanceOf(arbiter), expectedFee);
     }
 
     function test_Resolve_RefundBuyer() public {
@@ -446,7 +456,10 @@ contract EscrowTest is Test {
         escrow.resolve(false);
 
         assertEq(uint256(escrow.status()), uint256(Escrow.Status.RESOLVED));
-        assertEq(usdc.balanceOf(buyer), buyerBalanceBefore + AMOUNT);
+        
+        uint256 expectedFee = (AMOUNT * factory.arbiterFeeBps()) / 10000;
+        assertEq(usdc.balanceOf(buyer), buyerBalanceBefore + AMOUNT - expectedFee);
+        assertEq(usdc.balanceOf(arbiter), expectedFee);
     }
 
     function test_RevertResolve_NotArbiter() public {

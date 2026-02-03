@@ -38,10 +38,11 @@ contract Escrow is ReentrancyGuard {
         RESOLVED    // Dispute resolved by arbiter
     }
 
-    // Constants - Base Mainnet
-    address public constant SWAP_ROUTER = 0x2626664c2603336E57B271c5C0b26F421741e481;
-    address public constant TOWNS_TOKEN = 0x000000fa00b200406de700041cfc6b19bbfb4d13;
-    uint24 public constant POOL_FEE = 3000; // 0.3% Uniswap pool fee
+    // Configuration - Set via constructor from Factory
+    address public immutable swapRouter;
+    address public immutable feeToken;
+    uint24 public immutable poolFee;
+    uint16 public immutable arbiterFeeBps;
 
     // Deal parameters
     address public immutable buyer;
@@ -80,7 +81,11 @@ contract Escrow is ReentrancyGuard {
         uint256 _amount,
         uint256 _deadline,
         address _arbiter,
-        bytes32 _memoHash
+        bytes32 _memoHash,
+        address _swapRouter,
+        address _feeToken,
+        uint24 _poolFee,
+        uint16 _arbiterFeeBps
     ) {
         require(_buyer != address(0), "Invalid buyer");
         require(_seller != address(0), "Invalid seller");
@@ -96,6 +101,12 @@ contract Escrow is ReentrancyGuard {
         deadline = _deadline;
         arbiter = _arbiter;
         memoHash = _memoHash;
+        
+        swapRouter = _swapRouter;
+        feeToken = _feeToken;
+        poolFee = _poolFee;
+        arbiterFeeBps = _arbiterFeeBps;
+
         status = Status.CREATED;
     }
 
@@ -124,27 +135,33 @@ contract Escrow is ReentrancyGuard {
     function _payFeeInTowns(uint256 usdcAmount) internal returns (uint256 townsReceived) {
         if (usdcAmount == 0 || arbiter == address(0)) return 0;
 
-        // Approve SwapRouter to spend USDC
-        IERC20(token).approve(SWAP_ROUTER, usdcAmount);
+        if (swapRouter == address(0)) {
+            IERC20(token).safeTransfer(arbiter, usdcAmount);
+            emit FeePaid(arbiter, usdcAmount, 0);
+            return 0;
+        }
 
-        // Swap USDC -> TOWNS
+        // Approve SwapRouter to spend USDC
+        IERC20(token).approve(swapRouter, usdcAmount);
+
+        // Swap USDC -> TOWNS (or feeToken)
         ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
             tokenIn: token,
-            tokenOut: TOWNS_TOKEN,
-            fee: POOL_FEE,
+            tokenOut: feeToken,
+            fee: poolFee,
             recipient: arbiter,
             deadline: block.timestamp,
             amountIn: usdcAmount,
-            amountOutMinimum: 0, // Accept any amount (consider adding slippage protection)
+            amountOutMinimum: 0, // Accept any amount
             sqrtPriceLimitX96: 0
         });
 
-        try ISwapRouter(SWAP_ROUTER).exactInputSingle(params) returns (uint256 amountOut) {
+        try ISwapRouter(swapRouter).exactInputSingle(params) returns (uint256 amountOut) {
             townsReceived = amountOut;
             emit FeePaid(arbiter, usdcAmount, townsReceived);
         } catch {
             // If swap fails, send USDC directly to arbiter as fallback
-            IERC20(token).approve(SWAP_ROUTER, 0); // Reset approval
+            IERC20(token).approve(swapRouter, 0); // Reset approval
             IERC20(token).safeTransfer(arbiter, usdcAmount);
             emit FeePaid(arbiter, usdcAmount, 0);
             townsReceived = 0;
@@ -163,7 +180,7 @@ contract Escrow is ReentrancyGuard {
 
         uint256 fee = 0;
         if (arbiter != address(0)) {
-            fee = amount / 1000; // 0.1%
+            fee = (amount * arbiterFeeBps) / 10000;
             _payFeeInTowns(fee);
         }
 
@@ -211,7 +228,7 @@ contract Escrow is ReentrancyGuard {
 
         status = Status.RESOLVED;
 
-        uint256 fee = amount / 1000; // 0.1%
+        uint256 fee = (amount * arbiterFeeBps) / 10000;
         _payFeeInTowns(fee);
 
         address winner = _payToSeller ? seller : buyer;
