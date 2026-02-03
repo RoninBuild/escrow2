@@ -142,15 +142,17 @@ contract Escrow is ReentrancyGuard {
      * @return townsReceived Amount of TOWNS received
      */
     function _payFeeInTowns(uint256 usdcAmount) internal returns (uint256 townsReceived) {
-        if (usdcAmount < 10000 || arbiter == address(0)) return 0; // Skip swap for dust (< 0.01 USDC)
+        if (usdcAmount == 0 || arbiter == address(0)) return 0;
 
-        if (swapRouter == address(0)) {
+        // If amount is too small for swap (< 0.01 USDC) or no router set, send USDC directly
+        if (usdcAmount < 10000 || swapRouter == address(0)) {
             IERC20(token).safeTransfer(arbiter, usdcAmount);
             emit FeePaid(arbiter, usdcAmount, 0);
             return 0;
         }
 
         // Approve SwapRouter to spend USDC
+
         IERC20(token).approve(swapRouter, usdcAmount);
 
         // Path: USDC -> 0.3% -> WETH -> 1% -> TOWNS
